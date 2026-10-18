@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "VocaMate",
+  "version": "1.0.0",
+  "description": "Asisten percakapan suara AI yang hands-free dan tetap berjalan saat kamu berpindah tab.",
+  "permissions": ["sidePanel", "storage"],
+  "host_permissions": ["http://localhost:3000/*", "<all_urls>"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "action": {
+    "default_title": "Buka VocaMate"
+  }
+}

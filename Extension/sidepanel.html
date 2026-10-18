@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <title>VocaMate</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="kepala">
+    <span class="logo">VocaMate</span>
+    <span id="label-paket" class="lencana hidden"></span>
+  </header>
+
+  <div id="notif" class="notif hidden" role="status"></div>
+
+  <!-- ========== UC-01 / UC-02: Masuk dan Daftar ========== -->
+  <section id="view-masuk" class="view">
+    <h1>Masuk</h1>
+    <form id="form-masuk" class="form">
+      <label>Email <input type="email" name="email" autocomplete="email" required></label>
+      <label>Password <input type="password" name="password" autocomplete="current-password" required></label>
+      <button type="submit" class="btn utama">Masuk</button>
+    </form>
+    <p class="kecil">Belum punya akun? <button class="tautan" data-ke="view-daftar">Daftar</button></p>
+  </section>
+
+  <section id="view-daftar" class="view hidden">
+    <h1>Daftar</h1>
+    <form id="form-daftar" class="form">
+      <label>Nama <input type="text" name="nama" autocomplete="name" required></label>
+      <label>Email <input type="email" name="email" autocomplete="email" required></label>
+      <label>Password <input type="password" name="password" autocomplete="new-password" required>
+        <span class="petunjuk">Minimal 8 karakter, mengandung huruf dan angka.</span>
+      </label>
+      <button type="submit" class="btn utama">Daftar</button>
+    </form>
+    <p class="kecil">Sudah punya akun? <button class="tautan" data-ke="view-masuk">Masuk</button></p>
+  </section>
+
+  <!-- ========== Panel utama (setelah login) ========== -->
+  <div id="app" class="hidden">
+    <nav class="menu">
+      <button class="menu-item aktif" data-tab="tab-bicara">Bicara</button>
+      <button class="menu-item" data-tab="tab-persona">Persona dan Suara</button>
+      <button class="menu-item" data-tab="tab-riwayat">Riwayat</button>
+      <button class="menu-item" data-tab="tab-memori">Memori</button>
+      <button class="menu-item" data-tab="tab-upgrade">Upgrade</button>
+      <button class="menu-item" data-tab="tab-akun">Akun</button>
+    </nav>
+
+    <!-- UC-05 / UC-06: Percakapan suara -->
+    <section id="tab-bicara" class="tab">
+      <div class="kuota">
+        <div class="kuota-teks"><span>Sisa kuota</span><b id="kuota-sisa">-</b></div>
+        <div class="bar"><div id="kuota-bar" class="bar-isi"></div></div>
+      </div>
+
+      <div id="status-sesi" class="status" data-status="idle">
+        <span class="titik"></span><span id="status-teks">Siap</span>
+      </div>
+      <p id="persona-aktif" class="kecil tengah"></p>
+
+      <div id="kontrol-idle">
+        <button id="btn-mulai" class="btn utama besar">Mulai Bicara</button>
+      </div>
+
+      <div id="kontrol-sesi" class="hidden">
+        <div class="baris-kontrol">
+          <button id="btn-jeda" class="btn">Jeda</button>
+          <button id="btn-bisu" class="btn">Bisukan</button>
+          <button id="btn-akhiri" class="btn bahaya">Akhiri</button>
+        </div>
+        <button id="btn-baca-layar" class="btn penuh">Baca Layar</button>
+        <p class="kecil tengah" id="info-baca-layar"></p>
+      </div>
+
+      <div id="percakapan" class="percakapan" aria-live="polite"></div>
+      <p class="kecil redup">Gunakan headset agar suara AI tidak tertangkap mikrofon.</p>
+    </section>
+
+    <!-- UC-04: Persona dan Suara -->
+    <section id="tab-persona" class="tab hidden">
+      <h2>Persona</h2>
+      <div id="daftar-persona" class="pilihan"></div>
+      <h2>Suara</h2>
+      <div id="daftar-suara" class="pilihan"></div>
+      <p class="kecil redup">Suara ekspresif dan kustomisasi kepribadian khusus Pengguna Premium.</p>
+      <button id="btn-simpan-persona" class="btn utama penuh">Simpan</button>
+    </section>
+
+    <!-- UC-07: Riwayat -->
+    <section id="tab-riwayat" class="tab hidden">
+      <div id="riwayat-daftar"></div>
+      <div id="riwayat-detail" class="hidden">
+        <button id="btn-kembali-riwayat" class="tautan">&larr; Kembali</button>
+        <h2 id="riwayat-judul"></h2>
+        <div id="riwayat-transkrip" class="percakapan"></div>
+        <button id="btn-hapus-riwayat" class="btn bahaya penuh">Hapus Sesi Ini</button>
+      </div>
+    </section>
+
+    <!-- UC-07: Memori (khusus Premium) -->
+    <section id="tab-memori" class="tab hidden">
+      <h2>Memori Jangka Panjang</h2>
+      <p>Memori jangka panjang membuat AI mengingat hal penting dari percakapan sebelumnya.</p>
+      <div class="kotak-info">Fitur ini khusus Pengguna Premium dan belum tersedia di versi ini.</div>
+    </section>
+
+    <!-- UC-08: Upgrade -->
+    <section id="tab-upgrade" class="tab hidden">
+      <h2>Paket</h2>
+      <div id="daftar-paket"></div>
+      <div class="kotak-info">Pembayaran Premium (QRIS, e-wallet, virtual account) belum tersedia di versi ini.</div>
+    </section>
+
+    <!-- UC-02 / UC-03: Akun -->
+    <section id="tab-akun" class="tab hidden">
+      <h2>Akun</h2>
+      <dl id="info-akun" class="info"></dl>
+      <button id="btn-keluar" class="btn penuh">Keluar</button>
+
+      <details class="zona-bahaya">
+        <summary>Hapus Akun</summary>
+        <p class="kecil">Akun, riwayat percakapan, dan seluruh data pribadimu akan dihapus permanen.</p>
+        <form id="form-hapus-akun" class="form">
+          <label>Masukkan password untuk konfirmasi
+            <input type="password" name="password" autocomplete="current-password" required>
+          </label>
+          <button type="submit" class="btn bahaya">Hapus Akun Permanen</button>
+        </form>
+      </details>
+    </section>
+  </div>
+
+  <script src="sidepanel.js"></script>
+</body>
+</html>
