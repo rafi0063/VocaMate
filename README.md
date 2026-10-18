@@ -1,7 +1,5 @@
 # VocaMate
 
-Ekstensi peramban berbasis Chromium yang menyediakan asisten percakapan suara AI secara hands-free. Dokumen acuan: SRS dan SDD VocaMate v1.3.
-
 VocaMate adalah ekstensi Chrome yang bisa dipakai buat ngobrol dengan AI lewat suara. Kamu cukup bicara, lalu AI menjawab dengan suara juga, jadi tidak perlu pencet tombol setiap giliran. Obrolannya tetap jalan walaupun kamu pindah tab atau lagi buka website lain.
 
 AI-nya punya tiga persona, yaitu Teman, Pacar Virtual, dan Mentor, dengan gaya bicara yang berbeda. Kalau perlu, AI juga bisa diminta membaca isi layar, misalnya untuk menjelaskan halaman yang sedang dibuka.
