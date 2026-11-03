@@ -27,7 +27,7 @@
   <section id="view-daftar" class="view hidden">
     <h1>Daftar</h1>
     <form id="form-daftar" class="form">
-      <label>Nama <input type="text" name="nama" autocomplete="name" required></label>
+      <label>Nama <input type="text" name="nama" autocomplete="name" maxlength="100" required></label>
       <label>Email <input type="email" name="email" autocomplete="email" required></label>
       <label>Password <input type="password" name="password" autocomplete="new-password" required>
         <span class="petunjuk">Minimal 8 karakter, mengandung huruf dan angka.</span>
@@ -48,7 +48,7 @@
       <button class="menu-item" data-tab="tab-akun">Akun</button>
     </nav>
 
-    <!-- UC-05 / UC-06: Percakapan suara -->
+    <!-- UC-06 / UC-07: Percakapan suara -->
     <section id="tab-bicara" class="tab">
       <div class="kuota">
         <div class="kuota-teks"><span>Sisa kuota</span><b id="kuota-sisa">-</b></div>
@@ -78,17 +78,41 @@
       <p class="kecil redup">Gunakan headset agar suara AI tidak tertangkap mikrofon.</p>
     </section>
 
-    <!-- UC-04: Persona dan Suara -->
+    <!-- UC-05: Persona dan Suara -->
     <section id="tab-persona" class="tab hidden">
       <h2>Persona</h2>
       <div id="daftar-persona" class="pilihan"></div>
+
+      <!-- UC-05: kustomisasi kepribadian (Premium) -->
+      <div id="panel-kustomisasi" class="panel hidden">
+        <h2 id="judul-kustomisasi"></h2>
+        <div id="info-kustomisasi" class="kotak-info hidden"></div>
+        <form id="form-kepribadian" class="form">
+          <fieldset id="isian-kustomisasi">
+            <label>Nama panggilan AI
+              <input type="text" name="nama_panggilan" maxlength="50" placeholder="misalnya Nara">
+            </label>
+            <label>Sifat
+              <textarea name="sifat" maxlength="255" placeholder="misalnya ceria, sabar, suka bercanda"></textarea>
+            </label>
+            <label>Gaya bicara
+              <textarea name="gaya_bicara" maxlength="255" placeholder="misalnya santai, pakai bahasa gaul, sering memberi semangat"></textarea>
+              <span class="petunjuk">Kosongkan kolom yang tidak ingin diubah. Berlaku pada sesi berikutnya.</span>
+            </label>
+            <button type="submit" class="btn utama">Simpan Kustomisasi</button>
+          </fieldset>
+        </form>
+        <button id="btn-reset-kustomisasi" class="btn bahaya penuh">Kembalikan ke Bawaan</button>
+        <button id="btn-tutup-kustomisasi" class="btn penuh">Tutup</button>
+      </div>
+
       <h2>Suara</h2>
       <div id="daftar-suara" class="pilihan"></div>
       <p class="kecil redup">Suara ekspresif dan kustomisasi kepribadian khusus Pengguna Premium.</p>
       <button id="btn-simpan-persona" class="btn utama penuh">Simpan</button>
     </section>
 
-    <!-- UC-07: Riwayat -->
+    <!-- UC-08: Riwayat -->
     <section id="tab-riwayat" class="tab hidden">
       <div id="riwayat-daftar"></div>
       <div id="riwayat-detail" class="hidden">
@@ -99,21 +123,47 @@
       </div>
     </section>
 
-    <!-- UC-07: Memori (khusus Premium) -->
+    <!-- UC-08: Memori (khusus Premium) -->
     <section id="tab-memori" class="tab hidden">
       <h2>Memori Jangka Panjang</h2>
-      <p>Memori jangka panjang membuat AI mengingat hal penting dari percakapan sebelumnya.</p>
-      <div class="kotak-info">Fitur ini khusus Pengguna Premium dan belum tersedia di versi ini.</div>
+      <p class="kecil redup">Saat aktif, AI mencatat hal penting dari percakapanmu (misalnya preferensi dan informasi yang
+        kamu sebutkan) setelah sesi berakhir, lalu memakainya sebagai konteks di sesi berikutnya.</p>
+      <label class="sakelar"><input type="checkbox" id="sakelar-memori"> <span>Aktifkan memori</span></label>
+      <div id="info-memori" class="kotak-info hidden"></div>
+      <div id="daftar-memori"></div>
+      <button id="btn-hapus-semua-memori" class="btn bahaya penuh hidden">Hapus Semua Memori</button>
     </section>
 
-    <!-- UC-08: Upgrade -->
+    <!-- UC-09: Upgrade -->
     <section id="tab-upgrade" class="tab hidden">
+      <div id="status-langganan" class="kotak-info"></div>
       <h2>Paket</h2>
-      <div id="daftar-paket"></div>
-      <div class="kotak-info">Pembayaran Premium (QRIS, e-wallet, virtual account) belum tersedia di versi ini.</div>
+      <div id="daftar-paket" class="pilihan"></div>
+
+      <div id="form-bayar" class="hidden">
+        <h2>Metode Pembayaran</h2>
+        <div class="pilihan">
+          <label class="opsi"><input type="radio" name="metode" value="qris" checked>
+            <span class="isi"><b>QRIS</b>Pindai dari aplikasi bank atau e-wallet apa pun</span></label>
+          <label class="opsi"><input type="radio" name="metode" value="ewallet">
+            <span class="isi"><b>E-wallet</b>Lanjutkan pembayaran di aplikasi e-wallet</span></label>
+          <label class="opsi"><input type="radio" name="metode" value="va">
+            <span class="isi"><b>Virtual Account</b>Transfer lewat ATM, m-banking, atau internet banking</span></label>
+        </div>
+        <button id="btn-bayar" class="btn utama penuh">Bayar</button>
+      </div>
+
+      <div id="instruksi-bayar" class="hidden">
+        <h2>Menunggu Pembayaran</h2>
+        <dl id="info-transaksi" class="info"></dl>
+        <button id="btn-buka-bayar" class="btn utama penuh">Buka Halaman Pembayaran</button>
+        <button id="btn-batal-bayar" class="btn bahaya penuh">Batalkan</button>
+        <p id="status-bayar" class="kecil tengah redup">Menunggu konfirmasi pembayaran...</p>
+      </div>
+      <p class="kecil redup">Prototype ini memakai Payment Gateway simulasi; tidak ada uang sungguhan yang dipindahkan.</p>
     </section>
 
-    <!-- UC-02 / UC-03: Akun -->
+    <!-- UC-02 / UC-03 / UC-04: Akun -->
     <section id="tab-akun" class="tab hidden">
       <h2>Akun</h2>
       <dl id="info-akun" class="info"></dl>

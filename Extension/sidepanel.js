@@ -86,6 +86,7 @@ const PEMUAT = {
   'tab-bicara': () => { if (!sesi.id) muatKuota(); },
   'tab-persona': muatPersona,
   'tab-riwayat': muatRiwayat,
+  'tab-memori': muatMemori,
   'tab-upgrade': muatPaket,
   'tab-akun': muatAkun,
 };
@@ -104,6 +105,11 @@ document.querySelectorAll('[data-ke]').forEach((b) => b.addEventListener('click'
 $('form-daftar').addEventListener('submit', async (e) => {
   e.preventDefault();
   const f = Object.fromEntries(new FormData(e.target));
+  f.nama = f.nama.trim();
+  f.email = f.email.trim();
+  if (!f.nama) return notif('Nama tidak boleh kosong atau hanya spasi.', 'galat');
+  if (!/^\p{L}[\p{L} .'-]*$/u.test(f.nama))
+    return notif('Nama hanya boleh berisi huruf, spasi, titik, apostrof, dan tanda hubung.', 'galat');
   if (f.password.length < 8 || !/[A-Za-z]/.test(f.password) || !/\d/.test(f.password))
     return notif('Password minimal 8 karakter, mengandung huruf dan angka.', 'galat');
   try {
@@ -137,10 +143,12 @@ $('form-masuk').addEventListener('submit', async (e) => {
 function masukApp() {
   tampilView('app');
   bukaTab('tab-bicara');
+  cekPengingatPremium();
 }
 
 async function keluarLokal() {
   token = null;
+  hentikanPantau();
   await hapusLokal(['token', 'tertunda']);
   $('label-paket').classList.add('hidden');
   tampilView('view-masuk');
@@ -179,7 +187,7 @@ async function muatKuota() {
   }
 }
 
-// ================= UC-05 Melakukan Percakapan Suara =================
+// ================= UC-06 Melakukan Percakapan Suara =================
 
 const sesi = {
   id: null,
@@ -275,7 +283,7 @@ async function mulaiSesi() {
       antrian: Promise.resolve(),
     });
     $('percakapan').replaceChildren();
-    $('persona-aktif').textContent = `Persona: ${r.persona}`;
+    $('persona-aktif').textContent = `Persona: ${r.persona}${r.memori ? ' · Memori aktif' : ''}`;
     $('btn-jeda').textContent = 'Jeda';
     $('btn-bisu').textContent = 'Bisukan';
     $('kontrol-idle').classList.add('hidden');
@@ -450,25 +458,34 @@ const muatSuara = () => (daftarSuara = speechSynthesis.getVoices());
 speechSynthesis.addEventListener('voiceschanged', muatSuara);
 muatSuara();
 
+// Suara laki-laki Bahasa Indonesia yang dikenal (Windows: Andika; Edge: Ardi Online (Natural)).
+const SUARA_LAKI = ['andika', 'ardi'];
+
 // kode_suara_tts berisi nama suara peramban (misalnya "Google Bahasa Indonesia") atau kode bahasa ("id-ID").
-// Bila suara dengan nama itu tidak ada di perangkat, dipakai suara Bahasa Indonesia apa pun.
+// Bila suara dengan nama itu tidak ada di perangkat, dipakai suara Bahasa Indonesia lain. Untuk suara laki-laki,
+// dicari dulu suara laki-laki lain; bila tidak ada sama sekali, suara cadangan diputar dengan nada lebih rendah.
+// Mengembalikan { suara, nada }.
 function pilihSuara(kode) {
   const k = kode.toLowerCase();
-  return (
-    daftarSuara.find((v) => v.name.toLowerCase().includes(k)) ||
-    daftarSuara.find((v) => v.lang === kode) ||
-    daftarSuara.find((v) => v.lang.startsWith('id'))
-  );
+  const persis = daftarSuara.find((v) => v.name.toLowerCase().includes(k));
+  if (persis) return { suara: persis, nada: 1 };
+  const indo = daftarSuara.filter((v) => v.lang.toLowerCase().replace('_', '-').startsWith('id'));
+  if (SUARA_LAKI.some((n) => k.includes(n))) {
+    const laki = indo.find((v) => SUARA_LAKI.some((n) => v.name.toLowerCase().includes(n)));
+    return { suara: laki || indo[0], nada: laki ? 1 : 0.5 };
+  }
+  return { suara: daftarSuara.find((v) => v.lang === kode) || indo[0], nada: 1 };
 }
 
 // Memutar teks per kalimat (ujaran panjang sering terpotong di Chrome); onSelesai dipanggil setelah kalimat terakhir.
 function putarSuara(teks, kode, onSelesai) {
   speechSynthesis.cancel();
   const kalimat = teks.match(/[^.!?\n]+[.!?]*/g) || [teks];
-  const suara = pilihSuara(kode);
+  const { suara, nada } = pilihSuara(kode);
   kalimat.forEach((k, i) => {
     const u = new SpeechSynthesisUtterance(k.trim());
     u.lang = suara?.lang || 'id-ID';
+    u.pitch = nada;
     if (suara) u.voice = suara;
     if (i === kalimat.length - 1 && onSelesai) u.onend = onSelesai;
     speechSynthesis.speak(u);
@@ -566,7 +583,7 @@ window.addEventListener('pagehide', () => {
   });
 });
 
-// ================= UC-06 Membaca Konteks Layar =================
+// ================= UC-07 Membaca Konteks Layar =================
 
 function renderBacaLayar() {
   const { batas, pakai } = sesi.baca;
@@ -622,17 +639,36 @@ async function bacaLayar(teks) {
   return berhasil;
 }
 
-// ================= UC-04 Memilih Persona dan Suara =================
+// ================= UC-05 Memilih Persona dan Suara =================
+
+let dataPersonalisasi = null;
+let personaKustom = null; // persona yang sedang dikustomisasi
+
+const ringkasKustomisasi = (k) => [k.nama_panggilan, k.sifat, k.gaya_bicara].filter(Boolean).join(' · ');
 
 async function muatPersona() {
   try {
     const r = await api('/personalisasi');
+    dataPersonalisasi = r;
     $('daftar-persona').replaceChildren(
-      ...r.persona.map((p) =>
-        el('label', { class: 'opsi' },
+      ...r.persona.map((p) => {
+        const kk = r.kustomisasi.find((k) => k.id_persona_dasar === p.id_persona);
+        return el('label', { class: 'opsi' },
           el('input', { type: 'radio', name: 'persona', value: p.id_persona, checked: p.id_persona === r.id_persona_aktif }),
-          el('span', { class: 'isi' }, el('b', {}, p.nama_persona), p.deskripsi || ''))
-      )
+          el('span', { class: 'isi' },
+            el('b', {}, p.nama_persona),
+            p.deskripsi || '',
+            kk ? el('span', { class: 'ringkas' },
+              `Kustomisasi${kk.status === 'nonaktif' || !r.premium ? ' (nonaktif)' : ''}: ${ringkasKustomisasi(kk)}`) : null,
+            el('button', {
+              type: 'button',
+              class: 'tautan',
+              onclick: (e) => {
+                e.preventDefault();
+                bukaKustomisasi(p);
+              },
+            }, r.premium ? 'Kustomisasi kepribadian' : 'Kustomisasi kepribadian (Premium)')));
+      })
     );
     $('daftar-suara').replaceChildren(
       ...r.suara.map((s) => {
@@ -674,7 +710,68 @@ $('btn-simpan-persona').addEventListener('click', async () => {
   }
 });
 
-// ================= UC-07 Riwayat =================
+// ---------- kustomisasi kepribadian AI (Premium, FR-20) ----------
+
+function bukaKustomisasi(p) {
+  personaKustom = p;
+  const r = dataPersonalisasi;
+  const kk = r.kustomisasi.find((k) => k.id_persona_dasar === p.id_persona);
+  $('judul-kustomisasi').textContent = `Kustomisasi ${p.nama_persona}`;
+  const f = $('form-kepribadian');
+  for (const k of ['nama_panggilan', 'sifat', 'gaya_bicara']) f[k].value = kk?.[k] || '';
+  $('isian-kustomisasi').disabled = !r.premium;
+
+  const info = $('info-kustomisasi');
+  info.replaceChildren();
+  if (!r.premium) {
+    info.append('Kustomisasi kepribadian khusus Pengguna Premium. ',
+      el('button', { class: 'tautan', onclick: () => bukaTab('tab-upgrade') }, 'Upgrade ke Premium'));
+    if (kk) info.append(el('br'), 'Kustomisasimu tetap tersimpan dan aktif lagi saat Premium diperpanjang.');
+  }
+  info.classList.toggle('hidden', !info.childNodes.length);
+  $('btn-reset-kustomisasi').classList.toggle('hidden', !kk);
+  $('panel-kustomisasi').classList.remove('hidden');
+  $('panel-kustomisasi').scrollIntoView({ block: 'start', behavior: 'smooth' });
+}
+
+function tutupKustomisasi() {
+  personaKustom = null;
+  $('panel-kustomisasi').classList.add('hidden');
+}
+
+$('btn-tutup-kustomisasi').addEventListener('click', tutupKustomisasi);
+
+$('form-kepribadian').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (!personaKustom) return;
+  // kustomisasi sesi yang sedang berjalan tidak boleh berubah di tengah percakapan
+  if (sesi.id) return notif('Akhiri sesi percakapan dulu sebelum mengubah kustomisasi.', 'peringatan');
+  const isi = Object.fromEntries(new FormData(e.target));
+  if (!Object.values(isi).some((v) => v.trim())) return notif('Isi minimal satu kolom kustomisasi.', 'galat');
+  try {
+    const r = await api(`/kustomisasi/${personaKustom.id_persona}`, { method: 'PUT', body: isi });
+    notif(r.pesan, 'sukses');
+    tutupKustomisasi();
+    muatPersona();
+  } catch (err) {
+    if (err.status !== 401) notif(err.message, 'galat');
+  }
+});
+
+$('btn-reset-kustomisasi').addEventListener('click', async () => {
+  if (!personaKustom || !confirm(`Kembalikan kepribadian ${personaKustom.nama_persona} ke bawaan?`)) return;
+  if (sesi.id) return notif('Akhiri sesi percakapan dulu sebelum mengubah kustomisasi.', 'peringatan');
+  try {
+    const r = await api(`/kustomisasi/${personaKustom.id_persona}`, { method: 'DELETE' });
+    notif(r.pesan, 'sukses');
+    tutupKustomisasi();
+    muatPersona();
+  } catch (err) {
+    if (err.status !== 401) notif(err.message, 'galat');
+  }
+});
+
+// ================= UC-08 Riwayat =================
 
 let riwayatTerpilih = null;
 
@@ -729,27 +826,257 @@ $('btn-hapus-riwayat').addEventListener('click', async () => {
   }
 });
 
-// ================= UC-08 Upgrade (daftar paket) =================
+// ================= UC-09 Berlangganan Paket Premium =================
+
+const NAMA_METODE = { qris: 'QRIS', ewallet: 'E-wallet', va: 'Virtual Account' };
+const JEDA_PANTAU = 3000; // pemeriksaan status pembayaran berkala
+let transaksi = null;
+let timerPantau = null;
+
+const fiturPaket = (p) => [
+  `Kuota ${p.kuota_menit} menit per periode ${p.periode_reset}`,
+  `Baca layar ${p.batas_baca_layar === null ? 'tanpa batas' : p.batas_baca_layar + ' kali per periode'}`,
+  ...(Number(p.harga) > 0
+    ? ['Suara ekspresif yang lebih natural', 'Memori jangka panjang']
+    : ['Persona Teman, Pacar Virtual, dan Mentor', 'Suara standar']),
+];
 
 async function muatPaket() {
   try {
-    const [r, k] = await Promise.all([api('/paket'), api('/kuota')]);
+    const [r, l] = await Promise.all([api('/paket'), api('/langganan')]);
+    tampilStatusLangganan(l);
     $('daftar-paket').replaceChildren(
-      ...r.paket.map((p) =>
-        el('div', { class: 'item' },
-          el('b', {}, `${p.nama_paket}${p.nama_paket === k.paket ? ' · Paket kamu' : ''}`),
-          el('div', { class: 'meta' },
-            `${fmtRupiah(p.harga)}${p.durasi_hari ? ` / ${p.durasi_hari} hari` : ''} · ` +
-            `${p.kuota_menit} menit per periode ${p.periode_reset} · ` +
-            `baca layar ${p.batas_baca_layar === null ? 'tanpa batas' : p.batas_baca_layar + ' kali'}`))
-      )
+      ...r.paket.map((p) => {
+        const berbayar = Number(p.harga) > 0;
+        const kini = berbayar ? l.premium : !l.premium;
+        const isi = el('span', { class: 'isi' },
+          el('b', {}, `${p.nama_paket}${kini ? ' · Paket kamu' : ''}`),
+          `${fmtRupiah(p.harga)}${p.durasi_hari ? ` / ${p.durasi_hari} hari` : ''}`,
+          el('ul', { class: 'fitur' }, ...fiturPaket(p).map((f) => el('li', {}, f))));
+        return berbayar
+          ? el('label', { class: 'opsi' }, el('input', { type: 'radio', name: 'paket', value: p.id_paket, 'data-harga': p.harga }), isi)
+          : el('div', { class: 'opsi statis' }, isi);
+      })
     );
+    const pertama = document.querySelector('input[name="paket"]');
+    if (pertama) pertama.checked = true;
+    $('btn-bayar').textContent = l.premium ? 'Perpanjang Premium' : 'Upgrade ke Premium';
+    if (l.transaksi_menunggu) tampilInstruksi(l.transaksi_menunggu);
+    else tampilFormBayar(Boolean(pertama));
   } catch (err) {
     if (err.status !== 401) notif(err.message, 'galat');
   }
 }
 
-// ================= UC-03 Melihat Informasi dan Menghapus Akun =================
+function tampilStatusLangganan(l) {
+  const kotak = $('status-langganan');
+  kotak.classList.toggle('premium', l.premium);
+  if (!l.premium) return (kotak.textContent = 'Kamu memakai paket Free.');
+  const sisaHari = Math.ceil((new Date(l.berakhir) - Date.now()) / 86400000);
+  kotak.textContent = `Premium aktif sampai ${fmtTanggal(l.berakhir)}` +
+    (sisaHari <= 3 ? ` (tinggal ${sisaHari} hari, segera perpanjang).` : '.');
+}
+
+function tampilFormBayar(ada) {
+  hentikanPantau();
+  transaksi = null;
+  $('form-bayar').classList.toggle('hidden', !ada);
+  $('instruksi-bayar').classList.add('hidden');
+}
+
+$('btn-bayar').addEventListener('click', async () => {
+  const paket = document.querySelector('input[name="paket"]:checked');
+  const metode = document.querySelector('input[name="metode"]:checked');
+  if (!paket || !metode) return notif('Pilih paket dan metode pembayaran.', 'galat');
+  $('btn-bayar').disabled = true;
+  try {
+    const t = await api('/transaksi', { method: 'POST', body: { id_paket: Number(paket.value), metode: metode.value } });
+    tampilInstruksi(t);
+  } catch (err) {
+    if (err.status !== 401) notif(err.message, 'galat');
+  } finally {
+    $('btn-bayar').disabled = false;
+  }
+});
+
+function tampilInstruksi(t) {
+  transaksi = t;
+  const ins = t.instruksi || {};
+  const baris = [
+    ['Kode pesanan', t.kode_pesanan],
+    ['Jumlah', fmtRupiah(t.jumlah)],
+    ['Metode', NAMA_METODE[t.metode]],
+    ...(t.metode === 'qris' ? [['Kode QRIS', el('span', { class: 'kode' }, ins.kode_qris || '-')]] : []),
+    ...(t.metode === 'va' ? [['Bank', ins.bank], ['Nomor VA', el('span', { class: 'kode' }, ins.nomor_va || '-')]] : []),
+    ['Bayar sebelum', el('span', { id: 'hitung-mundur' })],
+  ];
+  $('info-transaksi').replaceChildren(...baris.flatMap(([k, v]) => [el('dt', {}, k), el('dd', {}, v)]));
+  $('btn-buka-bayar').textContent = ins.judul ? `${ins.judul} (simulasi)` : 'Buka Halaman Pembayaran';
+  $('status-bayar').textContent = 'Menunggu konfirmasi pembayaran...';
+  $('form-bayar').classList.add('hidden');
+  $('instruksi-bayar').classList.remove('hidden');
+  hentikanPantau();
+  timerPantau = setInterval(pantauPembayaran, JEDA_PANTAU);
+  perbaruiHitungMundur();
+}
+
+function perbaruiHitungMundur() {
+  const sisa = Math.max(0, Math.floor((new Date(transaksi.batas_waktu_bayar) - Date.now()) / 1000));
+  const e = $('hitung-mundur');
+  if (e) e.textContent = `${fmtTanggal(transaksi.batas_waktu_bayar)} (${fmtDurasi(sisa)} lagi)`;
+}
+
+function hentikanPantau() {
+  clearInterval(timerPantau);
+  timerPantau = null;
+}
+
+async function pantauPembayaran() {
+  if (!transaksi || !token) return hentikanPantau();
+  perbaruiHitungMundur();
+  try {
+    const t = await api(`/transaksi/${transaksi.id_transaksi}`);
+    if (t.status === 'menunggu') return;
+    hentikanPantau();
+    if (t.status === 'berhasil') {
+      notif(`Pembayaran berhasil. Premium aktif sampai ${fmtTanggal(t.premium_berakhir)}.`, 'sukses', 10000);
+      muatKuota(); // label paket di header ikut diperbarui
+    } else {
+      notif(t.status === 'kedaluwarsa'
+        ? 'Batas waktu pembayaran habis. Silakan buat pembayaran baru.'
+        : 'Pembayaran gagal atau dibatalkan. Kamu bisa memilih metode lain.', 'peringatan', 10000);
+    }
+    muatPaket();
+  } catch (err) {
+    if (err.status === 401) hentikanPantau();
+    // gangguan koneksi: dicoba lagi pada pemeriksaan berikutnya
+  }
+}
+
+$('btn-buka-bayar').addEventListener('click', () => {
+  if (transaksi?.instruksi?.url) chrome.tabs.create({ url: transaksi.instruksi.url });
+});
+
+$('btn-batal-bayar').addEventListener('click', async () => {
+  if (!transaksi || !confirm('Batalkan pembayaran ini?')) return;
+  try {
+    await api(`/transaksi/${transaksi.id_transaksi}/batal`, { method: 'POST' });
+    notif('Pembayaran dibatalkan.', 'info');
+  } catch (err) {
+    if (err.status !== 401 && err.status !== 409) notif(err.message, 'galat');
+  }
+  muatPaket();
+});
+
+// Pengingat sebelum masa Premium berakhir (dikirim sekali oleh server).
+async function cekPengingatPremium() {
+  try {
+    const l = await api('/langganan');
+    if (l.pengingat)
+      notif(`Premium kamu berakhir pada ${fmtTanggal(l.berakhir)}. Perpanjang di menu Upgrade agar fitur Premium tetap aktif.`, 'peringatan', 12000);
+  } catch { /* tidak mengganggu pemakaian */ }
+}
+
+// ================= UC-08 Memori Jangka Panjang =================
+
+let infoMemori = { premium: false, memori_aktif: false };
+
+async function muatMemori() {
+  try {
+    const r = await api('/memori');
+    infoMemori = r;
+    $('sakelar-memori').checked = r.memori_aktif;
+    // mengaktifkan khusus Premium; menonaktifkan selalu boleh
+    $('sakelar-memori').disabled = !r.premium && !r.memori_aktif;
+
+    const info = $('info-memori');
+    info.replaceChildren();
+    if (!r.premium) {
+      info.append('Memori jangka panjang khusus Pengguna Premium. ',
+        el('button', { class: 'tautan', onclick: () => bukaTab('tab-upgrade') }, 'Upgrade ke Premium'));
+      if (r.butir.length) info.append(el('br'), 'Memori yang tersimpan tidak dipakai selama Premium tidak aktif, tetapi tetap bisa kamu hapus.');
+    } else if (!r.memori_aktif) {
+      info.textContent = 'Memori sedang nonaktif: AI tidak mencatat atau memakai memori.';
+    }
+    info.classList.toggle('hidden', !info.childNodes.length);
+
+    $('btn-hapus-semua-memori').classList.toggle('hidden', !r.butir.length);
+    if (!r.butir.length) {
+      $('daftar-memori').replaceChildren(el('p', { class: 'redup' }, 'Memori masih kosong.'));
+      return;
+    }
+    $('daftar-memori').replaceChildren(...r.butir.map(itemMemori));
+  } catch (err) {
+    if (err.status !== 401) notif(err.message, 'galat');
+  }
+}
+
+function itemMemori(m) {
+  const item = el('div', { class: 'item statis' });
+  const tampil = () => item.replaceChildren(
+    el('div', {}, m.isi_memori),
+    el('div', { class: 'meta' }, `Dicatat ${fmtTanggal(m.dibuat_pada)}`),
+    el('div', { class: 'aksi' },
+      infoMemori.premium ? el('button', { class: 'tautan', onclick: ubah }, 'Ubah') : null,
+      el('button', { class: 'tautan bahaya', onclick: hapus }, 'Hapus'))
+  );
+  function ubah() {
+    const isian = el('textarea', { maxlength: 500 });
+    isian.value = m.isi_memori;
+    item.replaceChildren(isian, el('div', { class: 'aksi' },
+      el('button', { class: 'tautan', onclick: () => simpan(isian.value) }, 'Simpan'),
+      el('button', { class: 'tautan', onclick: tampil }, 'Batal')));
+    isian.focus();
+  }
+  async function simpan(isi) {
+    if (!isi.trim()) return notif('Isi memori tidak boleh kosong.', 'galat');
+    try {
+      await api(`/memori/${m.id_memori}`, { method: 'PUT', body: { isi_memori: isi } });
+      m.isi_memori = isi.trim();
+      tampil();
+      notif('Memori diperbarui.', 'sukses');
+    } catch (err) {
+      if (err.status !== 401) notif(err.message, 'galat');
+    }
+  }
+  async function hapus() {
+    if (!confirm('Hapus butir memori ini?')) return;
+    try {
+      await api(`/memori/${m.id_memori}`, { method: 'DELETE' });
+      notif('Memori dihapus.', 'sukses');
+      muatMemori();
+    } catch (err) {
+      if (err.status !== 401) notif(err.message, 'galat');
+    }
+  }
+  tampil();
+  return item;
+}
+
+$('sakelar-memori').addEventListener('change', async (e) => {
+  const aktif = e.target.checked;
+  try {
+    const r = await api('/memori/pengaturan', { method: 'PUT', body: { aktif } });
+    notif(r.pesan + ' Berlaku pada sesi berikutnya.', 'sukses');
+  } catch (err) {
+    e.target.checked = !aktif;
+    if (err.status !== 401) notif(err.message, 'galat');
+  }
+  muatMemori();
+});
+
+$('btn-hapus-semua-memori').addEventListener('click', async () => {
+  if (!confirm('Hapus semua memori? Tindakan ini tidak bisa dibatalkan.')) return;
+  try {
+    const r = await api('/memori', { method: 'DELETE' });
+    notif(r.pesan, 'sukses');
+    muatMemori();
+  } catch (err) {
+    if (err.status !== 401) notif(err.message, 'galat');
+  }
+});
+
+// ================= UC-03 Melihat Informasi Akun =================
 
 async function muatAkun() {
   try {
@@ -769,6 +1096,8 @@ async function muatAkun() {
     if (err.status !== 401) notif(err.message, 'galat');
   }
 }
+
+// ================= UC-04 Menghapus Akun =================
 
 $('form-hapus-akun').addEventListener('submit', async (e) => {
   e.preventDefault();

@@ -249,3 +249,41 @@ input:focus { outline: 2px solid var(--utama); outline-offset: -1px; }
   background: var(--kartu);
   border: 1px solid var(--garis);
 }
+
+/* ---------- memori ---------- */
+.item.statis { cursor: default; }
+.item.statis:hover { border-color: var(--garis); }
+.item .aksi { display: flex; gap: 12px; margin-top: 6px; }
+.tautan.bahaya { color: var(--bahaya); }
+.sakelar { display: flex; align-items: center; gap: 8px; font-weight: 600; margin: 12px 0; cursor: pointer; }
+.sakelar:has(input:disabled) { opacity: 0.55; cursor: not-allowed; }
+textarea {
+  font: inherit;
+  width: 100%;
+  min-height: 64px;
+  padding: 8px 10px;
+  border: 1px solid var(--garis);
+  border-radius: 8px;
+  background: var(--kartu);
+  color: var(--teks);
+  resize: vertical;
+}
+textarea:focus { outline: 2px solid var(--utama); outline-offset: -1px; }
+
+/* ---------- upgrade ---------- */
+.fitur { margin: 4px 0 0; padding-left: 18px; font-size: 12px; color: var(--redup); }
+.kode { font-family: ui-monospace, Consolas, monospace; word-break: break-all; }
+.kotak-info.premium { background: color-mix(in srgb, var(--sukses) 14%, var(--kartu)); }
+.opsi.statis { cursor: default; }
+
+/* ---------- kustomisasi kepribadian ---------- */
+.panel {
+  margin-top: 12px;
+  padding: 4px 12px 12px;
+  border: 1px solid var(--utama);
+  border-radius: var(--radius);
+  background: var(--kartu);
+}
+fieldset { border: 0; padding: 0; margin: 0; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+fieldset:disabled { opacity: 0.55; }
+.opsi .ringkas { display: block; font-size: 12px; color: var(--utama); margin-top: 2px; }
